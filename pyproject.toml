@@ -7,7 +7,7 @@ name = "ps2to3"
 version = "0.3.0"
 description = "convert printer profiles into the prusaslicer 3.x preset format"
 requires-python = ">=3.9"
-authors = [{ name = "Nomadsgalaxy" }]
+authors = [{ name = "nomadsgalaxy" }]
 # OCL is not an SPDX identifier, so the file is the statement
 license = { file = "LICENSE" }
 dependencies = []

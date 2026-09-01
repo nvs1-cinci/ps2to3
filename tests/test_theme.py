@@ -80,7 +80,7 @@ def test_the_package_states_its_author_and_licence():
     """SWAtt v1 asks a derivative to keep this in the source, so it is here to
     keep - and a refactor that drops it should fail a test, not a licence."""
     import ps2to3
-    assert ps2to3.__author__ == 'Nomadsgalaxy'
+    assert ps2to3.__author__ == 'nomadsgalaxy'
     assert ps2to3.__url__ == 'https://nomadsgalaxy.com'
     assert ps2to3.__license__ == 'OCL v1.1 + SWAtt v1'
 
@@ -101,5 +101,5 @@ def test_the_licence_file_names_the_version_and_the_addon():
     assert 'OCL v1.1 + SWAtt v1' in text
     assert 'Open Community License (OCL v1.1)' in text
     assert 'Software Attribution (SWAtt v1)' in text
-    assert 'Nomadsgalaxy' in text
+    assert 'nomadsgalaxy' in text
     assert 'nomadsgalaxy.com' in text
