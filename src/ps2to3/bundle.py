@@ -1,0 +1,172 @@
+"""reading a profile source.
+
+three shapes come in: a prusaslicer 2.x ini (a vendor bundle or a config bundle
+exported from the gui), an orca/bambu json vendor index, and a 3mf whose
+embedded configuration describes one printer.
+"""
+
+from __future__ import annotations
+
+import collections
+import os
+import re
+import tempfile
+import zipfile
+
+
+class Bundle:
+    """A parsed PrusaSlicer 2.x bundle."""
+
+    def __init__(self, path):
+        self.path = path
+        self.sections = self._parse(path)
+        self.vendor = self.sections.get('vendor', {})
+        self._resolved = {}
+
+    @staticmethod
+    def _parse(path):
+        """2.x INI: one `key = value` per line, newlines escaped as \\n.
+
+        There are no continuation lines, so anything that is not a section
+        header or a `key =` line is a comment or blank and is skipped.
+        """
+        secs = collections.OrderedDict()
+        cur = None
+        with open(path, encoding='utf-8') as fh:
+            lines = fh.readlines()
+        for raw in lines:
+            line = raw.rstrip('\n')
+            s = line.strip()
+            if not s or s.startswith('#') or s.startswith(';'):
+                continue
+            m = re.match(r'^\[(.+)\]$', s)
+            if m:
+                cur = m.group(1)
+                secs.setdefault(cur, collections.OrderedDict())
+                continue
+            if cur is None:
+                continue
+            m = re.match(r'^([A-Za-z_0-9]+)\s*=\s?(.*)$', line)
+            if m:
+                secs[cur][m.group(1)] = m.group(2).rstrip()
+        return secs
+
+    def names(self, kind, leaves_only=True):
+        out = []
+        for full in self.sections:
+            if not full.startswith(kind + ':'):
+                continue
+            name = full.split(':', 1)[1]
+            if leaves_only and name.startswith('*'):
+                continue
+            out.append(name)
+        return out
+
+    def resolve(self, kind, name, _seen=frozenset()):
+        """Flatten a preset through its `inherits` chain."""
+        full = f'{kind}:{name}'
+        if full in self._resolved:
+            return self._resolved[full]
+        if full in _seen:
+            raise ValueError(f'inherits cycle at {full}')
+        if full not in self.sections:
+            raise KeyError(full)
+        kv = self.sections[full]
+        out = collections.OrderedDict()
+        for parent in [p.strip() for p in kv.get('inherits', '').split(';') if p.strip()]:
+            out.update(self.resolve(kind, parent, _seen | {full}))
+        for k, v in kv.items():
+            if k not in ('inherits', 'renamed_from'):
+                out[k] = v
+        self._resolved[full] = out
+        return out
+
+    def compat(self, kind, name):
+        """How this preset says which printers it fits."""
+        cond = self.resolve(kind, name).get('compatible_printers_condition', '')
+        return ('condition', cond)
+
+    def printer_models(self):
+        """[printer_model:X] sections, or synthesised from the printer presets."""
+        models = collections.OrderedDict()
+        for full, kv in self.sections.items():
+            if full.startswith('printer_model:'):
+                models[full.split(':', 1)[1]] = dict(kv)
+        if models:
+            return models
+        # config bundle: no printer_model sections, derive from printer presets
+        for name in self.names('printer'):
+            kv = self.resolve('printer', name)
+            mid = kv.get('printer_model') or name
+            models.setdefault(mid, {'name': mid, 'technology': 'FFF'})
+        return models
+
+
+def ini_from_3mf(path, schema):
+    """Turn a 3MF's embedded configuration into a one-printer config bundle.
+
+    A 3MF stores the whole resolved configuration as `; key = value` lines in
+    Metadata/Slic3r_PE.config - one printer, one print and one filament - so it
+    converts like a config bundle exported from the GUI.
+    """
+    with zipfile.ZipFile(path) as z:
+        name = next((n for n in z.namelist() if n.endswith('Slic3r_PE.config')), None)
+        if not name:
+            raise SystemExit(f'{path}: no Slic3r_PE.config inside, not a '
+                             f'PrusaSlicer 3MF')
+        text = z.read(name).decode('utf-8', errors='replace')
+    values = {}
+    for line in text.splitlines():
+        m = re.match(r'^;\s*([A-Za-z_0-9]+)\s*=\s?(.*)$', line)
+        if m:
+            values[m.group(1)] = m.group(2)
+    buckets = {'printer': {}, 'print': {}, 'filament': {}}
+    for k, v in values.items():
+        for kind in ('printer', 'print', 'filament'):
+            if k in schema.pool(kind):
+                buckets[kind][k] = v
+                break
+    names = {
+        'printer': values.get('printer_settings_id') or 'Imported printer',
+        'print': values.get('print_settings_id') or 'Imported print',
+        'filament': values.get('filament_settings_id') or 'Imported filament',
+    }
+    out = [f'# generated by ps2to3 from {os.path.basename(path)}']
+    for kind in ('print', 'filament', 'printer'):
+        nm = names[kind].split(';')[0].strip().strip('"') or f'Imported {kind}'
+        out.append(f'\n[{kind}:{nm}]')
+        for k, v in sorted(buckets[kind].items()):
+            out.append(f'{k} = {v}')
+    return '\n'.join(out) + '\n'
+
+
+class SourceError(RuntimeError):
+    """the source cannot be read as any supported profile format."""
+
+
+def open_bundle(path, note=None, extra_trees=(), valid_names=frozenset(),
+                fix_gcode=False, schema=None):
+    """open a profile source and return something with the Bundle interface."""
+    from . import orca
+    if not os.path.isfile(path):
+        what = 'is a directory' if os.path.isdir(path) else 'does not exist'
+        raise SourceError(f'{path} {what}')
+    if path.lower().endswith('.3mf'):
+        if schema is None:
+            raise SourceError('reading a 3mf needs the config schema')
+        # the extracted configuration goes to a temporary directory rather than
+        # beside the 3mf: the source may sit somewhere read-only, and reading a
+        # file should not leave anything behind in the user's own folder
+        tmp = os.path.join(tempfile.mkdtemp(prefix='ps2to3-3mf-'),
+                           os.path.splitext(os.path.basename(path))[0] + '.ini')
+        with open(tmp, 'w', encoding='utf-8') as fh:
+            fh.write(ini_from_3mf(path, schema))
+        if note:
+            note(f'read the configuration embedded in {os.path.basename(path)}')
+        return Bundle(tmp)
+    if orca.looks_like_orca(path):
+        return orca.OrcaBundle(path, note=note, extra_trees=extra_trees,
+                               valid_names=valid_names, fix_gcode=fix_gcode)
+    if extra_trees:
+        raise SourceError('a filament library only applies to orca/bambu input')
+    return Bundle(path)

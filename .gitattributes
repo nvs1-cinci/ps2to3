@@ -1,0 +1,8 @@
+# the windows launcher is read line by line by cmd.exe, so it stays CRLF
+*.cmd text eol=crlf
+
+# everything else is LF, whatever the checkout platform prefers
+* text=auto eol=lf
+*.stl binary
+*.png binary
+*.svg text

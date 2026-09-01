@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=ps2to3 importer
+Comment=convert printer profiles to PrusaSlicer 3.x
+Exec=sh -c 'cd "$(dirname "%k")" && ./ps2to3-importer.sh'
+Icon=printer
+Terminal=false
+Categories=Graphics;Utility;

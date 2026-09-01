@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ps2to3"
+version = "0.3.0"
+description = "convert printer profiles into the prusaslicer 3.x preset format"
+requires-python = ">=3.9"
+authors = [{ name = "Nomadsgalaxy" }]
+# OCL is not an SPDX identifier, so the file is the statement
+license = { file = "LICENSE" }
+dependencies = []
+
+[project.urls]
+Homepage = "https://nomadsgalaxy.com"
+
+[project.optional-dependencies]
+# only `ps2to3 verify` reads a conversion back; converting and installing are
+# stdlib-only so the click-to-run launchers need no pip install
+verify = ["pyyaml"]
+dev = ["pyyaml", "pytest", "ruff"]
+
+[project.scripts]
+ps2to3 = "ps2to3.cli:main"
+
+[project.gui-scripts]
+ps2to3-importer = "ps2to3.gui.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+ps2to3 = ["schema.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = ["E501"]

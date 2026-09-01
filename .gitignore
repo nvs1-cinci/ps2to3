@@ -1,0 +1,15 @@
+# generated
+build/
+dist/
+*.egg-info/
+
+# local environment
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# printer artwork belongs to the vendors it came from, so it is not
+# redistributed here. see the "assets" section of the readme
+assets/
