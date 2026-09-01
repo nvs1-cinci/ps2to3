@@ -1,8 +1,8 @@
-# the windows launcher is read line by line by cmd.exe, so it stays CRLF
-*.cmd text eol=crlf
-
-# everything else is LF, whatever the checkout platform prefers
+# in gitattributes the last matching pattern wins, so the general rule comes
+# first and the specific ones after it
 * text=auto eol=lf
 *.stl binary
 *.png binary
-*.svg text
+
+# cmd.exe reads the windows launcher line by line, so it stays CRLF
+*.cmd text eol=crlf
