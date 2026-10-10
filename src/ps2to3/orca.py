@@ -697,15 +697,24 @@ class OrcaBundle:
             # intended one (100% = no shrinkage); PrusaSlicer's compensation is
             # how much to scale up (0% = none).  Passing 100 straight through
             # scales the model by 2x and the slice explodes.
-            sh = self._flatten(raw.get('filament_shrink'))
-            if sh:
+            # Orca's filament_shrinkage_compensation_z means the same printed-size
+            # percentage, under the very name PrusaSlicer uses for a compensation,
+            # so it would otherwise pass straight through as a 2x Z scale.
+            for src, dst in (('filament_shrink', 'filament_shrinkage_compensation_xy'),
+                             ('filament_shrinkage_compensation_z',
+                              'filament_shrinkage_compensation_z')):
+                sh = self._flatten(raw.get(src))
+                if not sh:
+                    continue
                 try:
                     pct = float(str(sh).rstrip('%'))
-                    if pct > 0:
-                        out['filament_shrinkage_compensation_xy'] = \
-                            f'{(100.0 / pct - 1.0) * 100.0:g}%'
                 except ValueError:
-                    pass
+                    out.pop(dst, None)
+                    continue
+                if pct > 0:
+                    out[dst] = f'{(100.0 / pct - 1.0) * 100.0:g}%'
+                else:
+                    out.pop(dst, None)
             pa = self._flatten(raw.get('enable_pressure_advance'))
             if pa is not None:
                 out['pressure_advance'] = 'enabled' if pa in ('1', 'true') else 'disabled'

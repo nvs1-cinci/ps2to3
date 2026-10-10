@@ -141,6 +141,21 @@ def test_inherits_is_resolved_and_the_child_wins(tree):
     assert kv['max_print_height'] == '200'
 
 
+def test_a_parent_saved_with_a_byte_order_mark_is_still_read(tree, tmp_path):
+    # Snapmaker ships fdm_process_common.json with a BOM; skipping it loses the
+    # base every one of their print presets inherits from
+    idx = tree({
+        'AC1 common': dict(MACHINE, instantiation='false', retraction_length=['1.0']),
+        'AC1 0.4': {'type': 'machine', 'inherits': 'AC1 common'},
+    })
+    parent = tmp_path / 'Acme' / 'machine' / 'AC1 common.json'
+    parent.write_bytes(b'\xef\xbb\xbf' + parent.read_bytes())
+    notes = []
+    b = OrcaBundle(idx, note=notes.append)
+    assert b.resolve('printer', 'AC1 0.4')['retract_length'] == '1.0'
+    assert not any('unreadable' in m for m in notes)
+
+
 def test_a_missing_parent_is_reported_rather_than_ignored(tree):
     b, notes = bundle(tree, {'AC1 0.4': dict(MACHINE, inherits='fdm base')})
     b.resolve('printer', 'AC1 0.4')
@@ -171,6 +186,18 @@ def test_filament_shrink_is_inverted_not_copied(tree, shrink, expected):
     b, _ = bundle(tree, {'PLA': {'type': 'filament', 'filament_shrink': shrink}})
     kv = b.resolve('filament', 'PLA')
     assert kv['filament_shrinkage_compensation_xy'] == expected
+
+
+@pytest.mark.parametrize('shrink,expected', [('100%', '0%'), ('99%', '1.0101%')])
+def test_z_shrink_is_inverted_even_though_the_name_matches(tree, shrink, expected):
+    """orca's filament_shrinkage_compensation_z is a printed size too.
+
+    snapmaker's u1 filaments state 100%; copied by name it doubled z and every
+    slice was refused over max_print_height.
+    """
+    b, _ = bundle(tree, {'PLA': {'type': 'filament',
+                                 'filament_shrinkage_compensation_z': [shrink]}})
+    assert b.resolve('filament', 'PLA')['filament_shrinkage_compensation_z'] == expected
 
 
 def test_zero_shrink_is_left_alone_rather_than_dividing_by_it(tree):

@@ -24,7 +24,8 @@ def write(path, text):
 
 
 def read_json(path):
-    with open(path, encoding='utf-8') as fh:
+    # utf-8-sig: some vendor files (Snapmaker's, for one) start with a BOM
+    with open(path, encoding='utf-8-sig') as fh:
         return json.load(fh)
 
 

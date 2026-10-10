@@ -2,6 +2,19 @@
 
 notable changes to ps2to3. newest first.
 
+## unreleased
+
+### fixed
+- orca: json files that start with a utf-8 byte-order mark are read instead of
+  skipped. snapmaker ships `fdm_process_common.json` (the base of every print
+  preset) and the u1's `0.20mm Standard` that way, so both silently went missing
+- orca: `filament_shrinkage_compensation_z` is inverted like `filament_shrink`.
+  orca's value is the printed size (100% = none) under the very name prusaslicer
+  uses for a compensation, so it passed straight through as a 2x z scale and
+  3.x refused every slice over `max_print_height`
+- convert: a printer config's default tool is the standard 0.4 nozzle when the
+  printer has one, not the smallest listed. the u1 opened on 0.2 mm tools
+
 ## 2026-08-31 (0.3.0)
 
 ### added

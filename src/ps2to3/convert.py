@@ -443,7 +443,11 @@ class Conversion:
                 f'  model: {slug(model.id).upper()}_FEEDER',
                 f'slot_count: {model.extruders}']))
         for model in self.models.values():
-            default_tool = model.tools[0]
+            # the standard 0.4 nozzle, not just the smallest one listed: a U1
+            # otherwise opens on 0.2 mm tools
+            default_tool = next((t for t in model.tools
+                                 if t.nozzle == 0.4 and not t.high_flow),
+                                model.tools[0])
             d = ['kind: printer_config', f'id: {slug(model.id).lower()}-cfg',
                  f'name: {yscalar(model.display)}',
                  f'printer: {slug(model.id).lower()}',

@@ -286,6 +286,51 @@ def test_tool_changer_gets_a_tool_count(multi_tool_ini, schema, tmp_path):
     assert printer['features']['multi_extruder']['default'] is True
 
 
+def test_printer_config_defaults_to_the_04_tool_not_the_smallest(write, schema,
+                                                                tmp_path):
+    ini = write('Small.ini', """
+        [vendor]
+        name = Small
+        repo_id = small-fff
+
+        [printer_model:SM]
+        name = Small One
+        variants = 0.2;0.4
+        technology = FFF
+
+        [printer:*common*]
+        printer_model = SM
+        printer_technology = FFF
+        gcode_flavor = marlin2
+        bed_shape = 0x0,200x0,200x200,0x200
+        max_print_height = 200
+        printer_notes = PRINTER_MODEL_SM
+
+        [printer:Small One 0.2 nozzle]
+        inherits = *common*
+        nozzle_diameter = 0.2
+        printer_variant = 0.2
+
+        [printer:Small One 0.4 nozzle]
+        inherits = *common*
+        nozzle_diameter = 0.4
+        printer_variant = 0.4
+
+        [print:0.20mm @SM]
+        layer_height = 0.2
+        compatible_printers_condition = printer_notes=~/.*PRINTER_MODEL_SM.*/
+
+        [filament:Small PLA @SM]
+        filament_type = PLA
+        compatible_printers_condition = printer_notes=~/.*PRINTER_MODEL_SM.*/
+        """)
+    conv = Conversion(open_bundle(ini, schema=schema), schema, vendor_id='Small')
+    out = str(tmp_path / 'b')
+    conv.emit(out)
+    cfg = [d for d in vendor_docs(out, 'Small') if d.get('kind') == 'printer_config'][0]
+    assert cfg['tools'][0]['tool'].endswith('0.4')
+
+
 def test_tool_changer_gets_one_extruder_offset_per_tool(multi_tool_ini, schema,
                                                        tmp_path):
     """3.x rejects a printer whose offsets are shorter than its tool count.
